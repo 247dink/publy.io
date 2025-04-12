@@ -1,12 +1,16 @@
 package main
 
 import (
+	"os"
+	"fmt"
+	"strconv"
 	"log/slog"
 	"net/http"
 	"strings"
 	"errors"
 	"time"
 	"context"
+	"io/ioutil"
 
 	"github.com/coder/websocket"
 )
@@ -17,6 +21,8 @@ type channel struct {
 }
 
 func (c channel) Send(message string) error {
+	slog.Debug("Sending message", "message", message, "clients", len(c.Listeners))
+
 	for i := range c.Listeners {
 		c.Listeners[i]<-message
 	}
@@ -89,24 +95,45 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 }
 
 func handleDispatch(r *http.Request, channel *channel) error {
-	var payload string
+	payload := ""
 
 	if r.Method == "GET" {
 		payload = r.URL.RawQuery
-		if payload == ""  {
-			return errors.New("Missing querystring")
-		}
+
 	} else {
-		buffer := make([]byte, 1024)
-		n, err := r.Body.Read(buffer)
+		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			return err
+			slog.Error("Error reading body", "err", err)
+		} else {
+			payload = string(body)
 		}
-		payload = string(buffer[:n])
 	}
 
-	channel.Send(payload)
-	return nil
+	return channel.Send(payload)
+}
+
+func parseArgs() (string, int) {
+	host := "127.0.0.1"
+	port := 8000
+	argv := os.Args[1:]
+	var err error
+
+	for i := range(argv) {
+		switch flag := argv[i]; flag {
+		case "-h":
+			host = argv[i + 1]
+			break
+
+		case "-p":
+			port, err = strconv.Atoi(argv[i + 1])
+			if err != nil {
+				panic(fmt.Sprintf("Invalid port: %s, %s", argv[i + 1], err.Error()))
+			}
+			break
+		}
+	}
+
+	return host, port
 }
 
 func main() {
@@ -117,16 +144,19 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		slog.Debug("Received request", "channel", channel.Name)
+		slog.Debug("Received request", "method", r.Method, "channel", channel.Name)
 
 		// Check if websocket (has Upgrade and Connection headers)
 		if isWebsocketRequest(r) {
-			go handleWebsocket(w, r, channel)
+			slog.Debug("Handling websocket")
+			handleWebsocket(w, r, channel)
 			return
 		}
 
+		slog.Debug("Handling dispatch")
 		err = handleDispatch(r, channel)
 		if err != nil {
+			slog.Error("Error dispatching message", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -136,7 +166,10 @@ func main() {
 
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	err := http.ListenAndServe("0.0.0.0:8000", handler)
+	host, port := parseArgs()
+	addr := fmt.Sprintf("%s:%d", host, port)
+	slog.Info("Listening at", "address", addr)
+	err := http.ListenAndServe(addr, handler)
 	if err != nil {
 		slog.Error("Could not start server", "err", err)
 	}
