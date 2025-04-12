@@ -68,15 +68,14 @@ class Publy:
     def address(self):
         return (self.host, self.port)
 
-    def dispatch(self, message, method='post'):
+    def dispatch(self, message, method='post', channel_name=CHANNEL_NAME):
         kwargs = {}
-        url = f'http://{self.host}:{self.port}/{CHANNEL_NAME}/'
+        url = f'http://{self.host}:{self.port}/{channel_name}/'
         if method == 'get':
             url += f'?{message}'
         else:
             kwargs['data'] = message
-        r = requests.request(method, url, **kwargs)
-        r.raise_for_status()
+        return requests.request(method, url, **kwargs)
 
     def stop(self):
         self._running = False
@@ -104,9 +103,26 @@ class BaseTestCase(TestCase):
 
 class PublyTestCase(BaseTestCase):
     def test_publy_post(self):
-        self.publy.dispatch('PING')
+        r = self.publy.dispatch('PING')
+        self.assertEqual(200, r.status_code)
         self.assertReceived('PING')
 
     def test_publy_get(self):
-        self.publy.dispatch('PING', method='get')
+        r = self.publy.dispatch('PING', method='get')
+        self.assertEqual(200, r.status_code)
         self.assertReceived('PING')
+
+    def test_publy_short(self):
+        r = self.publy.dispatch('PING', channel_name='foo')
+        self.assertEqual(400, r.status_code)
+
+    def test_publy_slash(self):
+        r = self.publy.dispatch(
+            'PING',
+            channel_name='foofoofoofoofoofoofoofoofoo/barbarbarbarbarbarbar',
+        )
+        self.assertEqual(400, r.status_code)
+
+    def test_publy_404(self):
+        r = self.publy.dispatch('PING', channel_name=str(uuid.uuid4()))
+        self.assertEqual(404, r.status_code)

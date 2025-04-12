@@ -15,6 +15,18 @@ import (
 	"github.com/coder/websocket"
 )
 
+func remove[S ~[]E, E comparable](items S, item E) S {
+	new := []E{}
+
+	for _, i := range items {
+		if i != item {
+			new = append(new, i)
+		}
+	}
+
+	return new
+}
+
 type channel struct {
 	Name string
 	Listeners []chan string
@@ -30,23 +42,59 @@ func (c channel) Send(message string) error {
 	return nil
 }
 
+func (c *channel) AddListener(queue chan string) {
+	c.Listeners = append(c.Listeners, queue)
+
+	CHANNELS[c.Name] = c
+}
+
+func (c *channel) RemoveListener(queue chan string) {
+	c.Listeners = remove(c.Listeners, queue)
+
+	if len(c.Listeners) == 0 {
+		delete(CHANNELS, c.Name)
+	}
+}
+
 var CHANNELS = map[string]*channel{}
 
-func getOrCreateChannel(path string) (*channel, error) {
+func newChannel(name string) *channel {
+	return &channel{Name: name}
+}
+
+func getChannel(name string)  *channel {
+	channel, ok := CHANNELS[name]
+
+	if !ok {
+		return nil
+	}
+
+	return channel
+}
+
+func parseChannelName(path string) (string, error) {
 	name := strings.Trim(path, "/")
 
 	if strings.Contains(name, "/") {
-		return nil, errors.New("Channel name cannot contain /")
+		return "", errors.New("Channel name cannot contain /")
 	}
 	if len(name) < 16 {
-		return nil, errors.New("Channel name must be at least 16 chars")
-	}
-	_, ok := CHANNELS[name]
-	if !ok {
-		CHANNELS[name] = &channel{Name: name}
+		return "", errors.New("Channel name must be at least 16 chars")
 	}
 
-	return CHANNELS[name], nil
+	return name, nil
+}
+
+func getOrCreateChannel(name string) (*channel, bool) {
+	created := false
+	channel := getChannel(name)
+
+	if channel == nil {
+		channel = newChannel(name)
+		created = true
+	}
+
+	return channel, created
 }
 
 func isWebsocketRequest(r *http.Request) bool {
@@ -83,7 +131,8 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 	ctx = c.CloseRead(ctx)
 
 	queue := make(chan string)
-	channel.Listeners = append(channel.Listeners, queue)
+	channel.AddListener(queue)
+	defer channel.RemoveListener(queue)
 
 	for {
 		message := <-queue
@@ -113,10 +162,10 @@ func handleDispatch(r *http.Request, channel *channel) error {
 }
 
 func parseArgs() (string, int) {
+	var err error
 	host := "127.0.0.1"
 	port := 8000
 	argv := os.Args[1:]
-	var err error
 
 	for i := range(argv) {
 		switch flag := argv[i]; flag {
@@ -138,22 +187,31 @@ func parseArgs() (string, int) {
 
 func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
-		// Parse channel from path.
-		channel, err := getOrCreateChannel(r.URL.Path)
+		status := http.StatusOK
+
+		// Parse channel name from path.
+		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
-			http.NotFound(w, r)
+			slog.Error("Could not parse channel name")			
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		slog.Debug("Received request", "method", r.Method, "channel", channel.Name)
 
 		// Check if websocket (has Upgrade and Connection headers)
 		if isWebsocketRequest(r) {
-			slog.Debug("Handling websocket")
+			channel, _ := getOrCreateChannel(name)
+			slog.Debug("Handling websocket", "channel", channel.Name)
 			handleWebsocket(w, r, channel)
 			return
 		}
 
-		slog.Debug("Handling dispatch")
+		channel := getChannel(name)
+		if channel == nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		slog.Debug("Handling dispatch", "channel", channel.Name)
 		err = handleDispatch(r, channel)
 		if err != nil {
 			slog.Error("Error dispatching message", "err", err)
@@ -161,7 +219,7 @@ func main() {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(status)
 	})
 
 	slog.SetLogLoggerLevel(slog.LevelDebug)
