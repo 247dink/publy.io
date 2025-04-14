@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    if: github.event.pull_request.merged == true
+    steps:
+      - uses: 'actions/checkout@v4'
+
+      - name: Get next version
+        uses: reecetech/version-increment@2024.10.1
+        id: version
+        with:
+          scheme: calver
+          increment: patch
+
+      - name: Push
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.PERSONAL_TOKEN }}
+          force: true
+
+      - uses: 'google-github-actions/auth@v2'
+        with:
+          service_account: 'my-service-account@publy-io-456813.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/248273285661/locations/global/workloadIdentityPools/github/providers/my-repo'
+
+      - uses: RafikFarhad/push-to-gcr-github-action@v5-rc1
+        with:
+          registry: us-central1-docker.pkg.dev
+          project_id: publy-io-456813
+          image_name: publy-io/publy
+          image_tag: ${{ steps.version.outputs.version }}
+          dockerfile: ./Dockerfile
+          context: ./
+
+      - id: 'deploy'
+        uses: 'google-github-actions/deploy-cloudrun@v2'
+        with:
+          service: 'publy-io'
+          image: 'us-central1-docker.pkg.dev/publy-io-456813/publy-io/publy:${{ steps.version.outputs.version }}'
+          env_vars: |
+            PUBLY_HOST=0.0.0.0
+
+      - name: 'deployed at'
+        run: 'curl "${{ steps.deploy.outputs.url }}"'
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PUBLY_IO_456813 }}'
+          projectId: publy-io-456813
+          channelId: live
