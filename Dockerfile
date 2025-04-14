@@ -3,7 +3,7 @@ ARG ALPINE_VERSION=3.21
 
 FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} AS build
 
-ADD ./publy /app
+ADD ./ /app
 
 WORKDIR /app
 

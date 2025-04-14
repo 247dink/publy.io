@@ -1,5 +1,13 @@
-publy.io: publy/*
-	go build -C publy -o ../publy.io
+SRC=$(wildcard go.* *.go)
+GOPATH=$(shell go env GOPATH)
+
+
+@{GOPATH}/bin/golangci-lint:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+
+publy.io: ${SRC}
+	go build -o publy.io
 
 
 build: publy.io
@@ -12,6 +20,10 @@ build: publy.io
 
 
 .venv: .venv/touchfile
+
+
+lint: ${GOPATH}/bin/golangci-lint
+	${GOPATH}/bin/golangci-lint run
 
 
 test: publy.io .venv

@@ -16,9 +16,7 @@ jobs:
         cache: false
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v5
-      with:
-        working-directory: publy
+      run: make lint
 
     - name: Test
       run: make test
