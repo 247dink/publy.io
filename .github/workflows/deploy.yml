@@ -25,12 +25,6 @@ jobs:
           scheme: calver
           increment: patch
 
-      - name: Push
-        uses: ad-m/github-push-action@master
-        with:
-          tags: true
-          force: true
-
       - uses: 'google-github-actions/auth@v2'
         with:
           service_account: 'my-service-account@publy-io-456813.iam.gserviceaccount.com'
@@ -38,7 +32,7 @@ jobs:
 
       - uses: RafikFarhad/push-to-gcr-github-action@v5-rc1
         with:
-          registry: us-central1-docker.pkg.dev
+          # registry: us-central1-docker.pkg.dev
           project_id: publy-io-456813
           image_name: publy-io/publy
           image_tag: ${{ steps.version.outputs.version }}
@@ -62,3 +56,9 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PUBLY_IO_456813 }}'
           projectId: publy-io-456813
           channelId: live
+
+      - name: Push
+        uses: ad-m/github-push-action@master
+        with:
+          tags: true
+          force: true
