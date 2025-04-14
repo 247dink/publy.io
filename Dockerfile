@@ -12,10 +12,12 @@ RUN go build
 
 FROM alpine:${ALPINE_VERSION} AS prod
 
-ENV PUBLY_HOST=127.0.0.1 \
-    PUBLY_PORT=8000
+ENV HOST=127.0.0.1 \
+    PORT=8000
 
 ADD ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT /entrypoint.sh
 
 COPY --from=build /app/publy.io /app/

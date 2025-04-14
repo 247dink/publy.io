@@ -1,3 +1,3 @@
-/bin/sh -x
+#!/bin/sh -x
 
-/app/publy.io -h ${PUBLY_HOST} -P ${PUBLY_PORT}
+/app/publy.io -h ${HOST} -p ${PORT}
