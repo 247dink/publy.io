@@ -11,8 +11,11 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents:
+        - read
+        - write
       pull-requests: write
+      id-token: write
     if: github.event.pull_request.merged == true
     steps:
       - uses: 'actions/checkout@v4'
@@ -27,6 +30,7 @@ jobs:
       - name: Push
         uses: ad-m/github-push-action@master
         with:
+          tags: true
           force: true
 
       - uses: 'google-github-actions/auth@v2'
