@@ -18,7 +18,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v5
       with:
-        working-directory: server
+        working-directory: publy
 
     - name: Test
       run: make test
