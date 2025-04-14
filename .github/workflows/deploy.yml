@@ -10,7 +10,9 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: write
+      pull-requests: write
     if: github.event.pull_request.merged == true
     steps:
       - uses: 'actions/checkout@v4'
@@ -25,7 +27,6 @@ jobs:
       - name: Push
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ secrets.PERSONAL_TOKEN }}
           force: true
 
       - uses: 'google-github-actions/auth@v2'
