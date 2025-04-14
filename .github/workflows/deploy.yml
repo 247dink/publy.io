@@ -11,9 +11,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents:
-        - read
-        - write
+      contents: write
       pull-requests: write
       id-token: write
     if: github.event.pull_request.merged == true
