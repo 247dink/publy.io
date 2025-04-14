@@ -30,14 +30,14 @@ jobs:
           service_account: 'my-service-account@publy-io-456813.iam.gserviceaccount.com'
           workload_identity_provider: 'projects/248273285661/locations/global/workloadIdentityPools/github/providers/my-repo'
 
-      # - uses: RafikFarhad/push-to-gcr-github-action@v5-rc1
-      #   with:
-      #     registry: us-central1-docker.pkg.dev
-      #     project_id: publy-io-456813
-      #     image_name: publy-io/publy
-      #     image_tag: ${{ steps.version.outputs.version }}
-      #     dockerfile: ./Dockerfile
-      #     context: ./
+      - uses: RafikFarhad/push-to-gcr-github-action@v5-rc1
+        with:
+          registry: us-central1-docker.pkg.dev
+          project_id: publy-io-456813
+          image_name: publy-io/publy
+          image_tag: ${{ steps.version.outputs.version }}
+          dockerfile: ./Dockerfile
+          context: ./
 
       - id: 'deploy'
         uses: 'google-github-actions/deploy-cloudrun@v2'
