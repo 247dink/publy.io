@@ -2,7 +2,7 @@ SRC=$(wildcard go.* *.go)
 GOPATH=$(shell go env GOPATH)
 
 
-@{GOPATH}/bin/golangci-lint:
+${GOPATH}/bin/golangci-lint:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 
