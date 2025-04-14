@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"io"
 	"fmt"
 	"strconv"
 	"log/slog"
@@ -10,7 +11,6 @@ import (
 	"errors"
 	"time"
 	"context"
-	"io/ioutil"
 
 	"github.com/coder/websocket"
 )
@@ -108,11 +108,8 @@ func isWebsocketRequest(r *http.Request) bool {
 	}
 
 	_, ok = r.Header["Connection"]
-	if !ok {
-		return false
-	}
 
-	return true
+	return ok
 }
 
 func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
@@ -123,7 +120,12 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer c.CloseNow()
+	defer func() {
+		err := c.CloseNow()
+		if err != nil {
+			slog.Error("Error closing websocket", "err", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(r.Context(), time.Minute * 10)
 	defer cancel()
@@ -150,7 +152,7 @@ func handleDispatch(r *http.Request, channel *channel) error {
 		payload = r.URL.RawQuery
 
 	} else {
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			slog.Error("Error reading body", "err", err)
 		} else {
@@ -171,14 +173,12 @@ func parseArgs() (string, int) {
 		switch flag := argv[i]; flag {
 		case "-h":
 			host = argv[i + 1]
-			break
 
 		case "-p":
 			port, err = strconv.Atoi(argv[i + 1])
 			if err != nil {
 				panic(fmt.Sprintf("Invalid port: %s, %s", argv[i + 1], err.Error()))
 			}
-			break
 		}
 	}
 

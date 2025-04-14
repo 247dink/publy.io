@@ -1,17 +1,33 @@
-publy.io: publy/*
-	go build -C publy -o ../publy.io
+SRC=$(wildcard go.* *.go)
+GOPATH=$(shell go env GOPATH)
+
+
+${GOPATH}/bin/golangci-lint:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+
+/usr/bin/virtualenv:
+	sudo apt-get install python3-virtualenv
+
+
+publy.io: ${SRC}
+	go build -o publy.io
 
 
 build: publy.io
 
 
-.venv/touchfile: requirements.txt
+.venv/touchfile: requirements.txt /usr/bin/virtualenv
 	test -d .venv || virtualenv .venv
 	. .venv/bin/activate; pip install -r requirements.txt
 	touch .venv/touchfile
 
 
 .venv: .venv/touchfile
+
+
+lint: ${GOPATH}/bin/golangci-lint
+	${GOPATH}/bin/golangci-lint run
 
 
 test: publy.io .venv
