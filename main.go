@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"errors"
-	"time"
 	"context"
 
 	"github.com/coder/websocket"
@@ -128,7 +127,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		}
 	}()
 
-	ctx = context.Background()
+	ctx := context.Background()
 	ctx = c.CloseRead(ctx)
 
 	queue := make(chan string)
