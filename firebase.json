@@ -5,8 +5,7 @@
         "source": "/**",
         "run": {
           "serviceId": "publy-io",
-          "region": "us-central1",
-          "pinTag": true
+          "region": "us-central1"
         }
       }
     ]
