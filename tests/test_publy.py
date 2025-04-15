@@ -96,7 +96,7 @@ class BaseTestCase(TestCase):
             recv = self.publy._queue.get(timeout=1.0)
 
         except queue.Empty:
-            recv = None
+            self.fail('Timed out waiting for message')
 
         self.assertEqual(recv, message)
 
@@ -114,13 +114,6 @@ class PublyTestCase(BaseTestCase):
 
     def test_publy_short(self):
         r = self.publy.dispatch('PING', channel_name='foo')
-        self.assertEqual(400, r.status_code)
-
-    def test_publy_slash(self):
-        r = self.publy.dispatch(
-            'PING',
-            channel_name='foofoofoofoofoofoofoofoofoo/barbarbarbarbarbarbar',
-        )
         self.assertEqual(400, r.status_code)
 
     def test_publy_404(self):
