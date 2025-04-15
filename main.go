@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"errors"
-	"time"
 	"context"
 
 	"github.com/coder/websocket"
@@ -52,6 +51,7 @@ func (c *channel) RemoveListener(queue chan string) {
 	c.Listeners = remove(c.Listeners, queue)
 
 	if len(c.Listeners) == 0 {
+		slog.Info("Removing channel", "name", c.Name)
 		delete(CHANNELS, c.Name)
 	}
 }
@@ -59,6 +59,7 @@ func (c *channel) RemoveListener(queue chan string) {
 var CHANNELS = map[string]*channel{}
 
 func newChannel(name string) *channel {
+	slog.Info("Creating channel", "name", name)
 	return &channel{Name: name}
 }
 
@@ -110,6 +111,8 @@ func isWebsocketRequest(r *http.Request) bool {
 }
 
 func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
+	slog.Debug("Handling websocket", "channel", channel.Name)
+
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
 	})
@@ -124,9 +127,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(r.Context(), time.Minute * 10)
-	defer cancel()
-
+	ctx := context.Background()
 	ctx = c.CloseRead(ctx)
 
 	queue := make(chan string)
@@ -143,7 +144,9 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 }
 
 func handleDispatch(r *http.Request, channel *channel) error {
-	payload := ""
+	slog.Debug("Handling dispatch", "channel", channel.Name)
+
+	payload := "__empty__"
 
 	if r.Method == "GET" {
 		payload = r.URL.RawQuery
@@ -184,8 +187,6 @@ func parseArgs() (string, int) {
 
 func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
-		status := http.StatusOK
-
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
@@ -197,18 +198,17 @@ func main() {
 		// Check if websocket (has Upgrade and Connection headers)
 		if isWebsocketRequest(r) {
 			channel, _ := getOrCreateChannel(name)
-			slog.Debug("Handling websocket", "channel", channel.Name)
 			handleWebsocket(w, r, channel)
 			return
 		}
 
+		// Not websocket, handle dispatch.
 		channel := getChannel(name)
 		if channel == nil {
 			http.NotFound(w, r)
 			return
 		}
 
-		slog.Debug("Handling dispatch", "channel", channel.Name)
 		err = handleDispatch(r, channel)
 		if err != nil {
 			slog.Error("Error dispatching message", "err", err)
@@ -216,7 +216,7 @@ func main() {
 			return
 		}
 
-		w.WriteHeader(status)
+		w.WriteHeader(http.StatusOK)
 	})
 
 	slog.SetLogLoggerLevel(slog.LevelDebug)
