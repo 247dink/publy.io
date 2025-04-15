@@ -53,13 +53,6 @@ jobs:
       - name: 'deployed at'
         run: 'curl "${{ steps.deploy.outputs.url }}"'
 
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PUBLY_IO_456813 }}'
-          projectId: publy-io-456813
-          channelId: live
-
       - name: Push
         uses: ad-m/github-push-action@master
         with:

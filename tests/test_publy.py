@@ -96,7 +96,7 @@ class BaseTestCase(TestCase):
             recv = self.publy._queue.get(timeout=1.0)
 
         except queue.Empty:
-            recv = None
+            self.fail('Timed out waiting for message')
 
         self.assertEqual(recv, message)
 

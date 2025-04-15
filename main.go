@@ -75,9 +75,6 @@ func getChannel(name string)  *channel {
 func parseChannelName(path string) (string, error) {
 	name := strings.Trim(path, "/")
 
-	if strings.Contains(name, "/") {
-		return "", errors.New("Channel name cannot contain /")
-	}
 	if len(name) < 16 {
 		return "", errors.New("Channel name must be at least 16 chars")
 	}
