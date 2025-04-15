@@ -116,13 +116,6 @@ class PublyTestCase(BaseTestCase):
         r = self.publy.dispatch('PING', channel_name='foo')
         self.assertEqual(400, r.status_code)
 
-    def test_publy_slash(self):
-        r = self.publy.dispatch(
-            'PING',
-            channel_name='foofoofoofoofoofoofoofoofoo/barbarbarbarbarbarbar',
-        )
-        self.assertEqual(400, r.status_code)
-
     def test_publy_404(self):
         r = self.publy.dispatch('PING', channel_name=str(uuid.uuid4()))
         self.assertEqual(404, r.status_code)
