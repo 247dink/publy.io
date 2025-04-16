@@ -135,7 +135,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 	ctx := context.Background()
 	ctx = c.CloseRead(ctx)
 
-	queue := make(chan string)
+	queue := make(chan string, 4)
 	channel.AddListener(queue)
 	defer channel.RemoveListener(queue)
 
