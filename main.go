@@ -35,7 +35,12 @@ func (c channel) Send(message string) error {
 	slog.Debug("Sending message", "message", message, "clients", len(c.Listeners))
 
 	for i := range c.Listeners {
-		c.Listeners[i]<-message
+		select {
+		case c.Listeners[i]<-message:
+			slog.Info("Message dispatched to listener")
+		default:
+			slog.Warn("Could not dispatch message to listener")
+		}
 	}
 
 	return nil
@@ -136,8 +141,10 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 
 	for {
 		message := <-queue
+		slog.Debug("Message to be sent via websocket", "message", message)
 		err = c.Write(ctx, websocket.MessageText, []byte(message))
 		if err != nil {
+			slog.Error("Error sending message", "err", err)
 			return
 		}
 	}
