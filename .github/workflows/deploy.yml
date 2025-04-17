@@ -49,6 +49,7 @@ jobs:
           timeout: 1h
           env_vars: |
             HOST=0.0.0.0
+            SENTRY_DSN=${{ vars.SENTRY_DSN }}
 
       - name: 'deployed at'
         run: 'curl "${{ steps.deploy.outputs.url }}"'
