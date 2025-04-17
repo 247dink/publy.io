@@ -12,7 +12,8 @@ import (
 	"context"
 
 	"github.com/coder/websocket"
-)
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http")
 
 func remove[S ~[]E, E comparable](items S, item E) S {
 	new := []E{}
@@ -118,16 +119,23 @@ func isWebsocketRequest(r *http.Request) bool {
 func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 	slog.Debug("Handling websocket", "channel", channel.Name)
 
+	hub := sentry.GetHubFromContext(r.Context())
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
 	})
 	if err != nil {
+		if hub != nil {
+			hub.CaptureException(err)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer func() {
 		err := c.CloseNow()
 		if err != nil {
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error closing websocket", "err", err)
 		}
 	}()
@@ -144,6 +152,9 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		slog.Debug("Message to be sent via websocket", "message", message)
 		err = c.Write(ctx, websocket.MessageText, []byte(message))
 		if err != nil {
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error sending message", "err", err)
 			return
 		}
@@ -153,6 +164,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 func handleDispatch(r *http.Request, channel *channel) error {
 	slog.Debug("Handling dispatch", "channel", channel.Name)
 
+	hub := sentry.GetHubFromContext(r.Context())
 	payload := "__empty__"
 
 	if r.Method == "GET" {
@@ -161,6 +173,9 @@ func handleDispatch(r *http.Request, channel *channel) error {
 	} else {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error reading body", "err", err)
 		} else {
 			payload = string(body)
@@ -193,10 +208,15 @@ func parseArgs() (string, int) {
 }
 
 func main() {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+	f := func(w http.ResponseWriter, r *http.Request) {
+		hub := sentry.GetHubFromContext(r.Context())
+
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Could not parse channel name")			
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -218,13 +238,32 @@ func main() {
 
 		err = handleDispatch(r, channel)
 		if err != nil {
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error dispatching message", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
-	})
+	}
+
+	var handler http.Handler
+	sentryDSN := os.Getenv("SENTRY_DSN")
+	if sentryDSN != "" {
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn: "https://24bf3eafe200b3720f99a1616bf1a309@o4506735924019200.ingest.us.sentry.io/4509170454102016",
+		}); err != nil {
+			slog.Error("Sentry initialization failed", "err", err)
+		}
+
+		sentryHandler := sentryhttp.New(sentryhttp.Options{})
+		handler = sentryHandler.HandleFunc(f)
+
+	} else {
+		handler = http.HandlerFunc(f)
+	}
 
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
