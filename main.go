@@ -124,14 +124,18 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		OriginPatterns: []string{"*"},
 	})
 	if err != nil {
-		hub.CaptureException(err)
+		if hub != nil {
+			hub.CaptureException(err)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer func() {
 		err := c.CloseNow()
 		if err != nil {
-			hub.CaptureException(err)
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error closing websocket", "err", err)
 		}
 	}()
@@ -148,7 +152,9 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		slog.Debug("Message to be sent via websocket", "message", message)
 		err = c.Write(ctx, websocket.MessageText, []byte(message))
 		if err != nil {
-			hub.CaptureException(err)
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error sending message", "err", err)
 			return
 		}
@@ -167,7 +173,9 @@ func handleDispatch(r *http.Request, channel *channel) error {
 	} else {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			hub.CaptureException(err)
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error reading body", "err", err)
 		} else {
 			payload = string(body)
@@ -206,7 +214,9 @@ func main() {
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
-			hub.CaptureException(err)
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Could not parse channel name")			
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -228,7 +238,9 @@ func main() {
 
 		err = handleDispatch(r, channel)
 		if err != nil {
-			hub.CaptureException(err)
+			if hub != nil {
+				hub.CaptureException(err)
+			}
 			slog.Error("Error dispatching message", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
