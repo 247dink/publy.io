@@ -214,9 +214,6 @@ func main() {
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
-			if hub != nil {
-				hub.CaptureException(err)
-			}
 			slog.Error("Could not parse channel name")			
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
