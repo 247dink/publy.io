@@ -13,7 +13,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/getsentry/sentry-go"
-	sentryhttp "github.com/getsentry/sentry-go/http")
+	sentryhttp "github.com/getsentry/sentry-go/http"
+)
 
 func remove[S ~[]E, E comparable](items S, item E) S {
 	new := []E{}
@@ -152,9 +153,6 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		slog.Debug("Message to be sent via websocket", "message", message)
 		err = c.Write(ctx, websocket.MessageText, []byte(message))
 		if err != nil {
-			if hub != nil {
-				hub.CaptureException(err)
-			}
 			slog.Error("Error sending message", "err", err)
 			return
 		}
@@ -214,7 +212,6 @@ func main() {
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
-			slog.Error("Could not parse channel name")			
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
