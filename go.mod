@@ -1,6 +1,6 @@
 module github.com/247dink/publy.io
 
-go 1.24
+go 1.24.1
 
 require (
 	github.com/coder/websocket v1.8.13 // indirect

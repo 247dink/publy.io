@@ -10,6 +10,7 @@ import (
 	"strings"
 	"errors"
 	"context"
+	"encoding/json"
 
 	"github.com/coder/websocket"
 	"github.com/getsentry/sentry-go"
@@ -26,6 +27,11 @@ func remove[S ~[]E, E comparable](items S, item E) S {
 	}
 
 	return new
+}
+
+type stats struct  {
+	Channels int `json:"channels"`
+	Listeners int `json:"listeners"`
 }
 
 type channel struct {
@@ -183,6 +189,20 @@ func handleDispatch(r *http.Request, channel *channel) error {
 	return channel.Send(payload)
 }
 
+func handleHealth(w http.ResponseWriter) {
+	health := &stats{
+		Channels: len(CHANNELS),
+		Listeners: 0,
+	}
+
+	for _, channel := range CHANNELS {
+		health.Listeners += len(channel.Listeners)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
+}
+
 func parseArgs() (string, int) {
 	var err error
 	host := "127.0.0.1"
@@ -213,6 +233,11 @@ func main() {
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if name == "health" {
+			handleHealth(w)
 			return
 		}
 
