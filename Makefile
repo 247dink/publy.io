@@ -13,7 +13,7 @@ publy.io: ${SRC}
 build: publy.io
 
 
-.venv/touchfile: requirements.txt /usr/bin/virtualenv
+.venv/.touchfile: requirements.txt /usr/bin/virtualenv
 	test -d .venv || virtualenv .venv
 	. .venv/bin/activate; pip install -r requirements.txt
 	touch .venv/.touchfile
