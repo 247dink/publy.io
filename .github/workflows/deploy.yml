@@ -44,7 +44,7 @@ jobs:
         uses: 'google-github-actions/deploy-cloudrun@v2'
         with:
           service: 'publy-io'
-          image: 'us-central1-docker.pkg.dev/publy-io-456813/publy-io/publy:2025.4.1'
+          image: 'us-central1-docker.pkg.dev/publy-io-456813/publy-io/publy:${{ steps.version.outputs.version }}'
           region: us-central1
           timeout: 1h
           env_vars: |
