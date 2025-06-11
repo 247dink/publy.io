@@ -54,6 +54,11 @@ jobs:
       - name: 'deployed at'
         run: 'curl "${{ steps.deploy.outputs.url }}"'
 
+      - name: Git checkin
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: git commit -am "v${VERSION}"
+
       - name: Push
         uses: ad-m/github-push-action@master
         with:
