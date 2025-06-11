@@ -10,6 +10,7 @@ import (
 	"strings"
 	"errors"
 	"context"
+	"encoding/json"
 
 	"github.com/coder/websocket"
 	"github.com/getsentry/sentry-go"
@@ -26,6 +27,11 @@ func remove[S ~[]E, E comparable](items S, item E) S {
 	}
 
 	return new
+}
+
+type stats struct  {
+	Channels int `json:"channels"`
+	Listeners int `json:"listeners"`
 }
 
 type channel struct {
@@ -183,6 +189,27 @@ func handleDispatch(r *http.Request, channel *channel) error {
 	return channel.Send(payload)
 }
 
+func handleHealth(w http.ResponseWriter) {
+	health := &stats{
+		Channels: len(CHANNELS),
+		Listeners: 0,
+	}
+
+	for _, channel := range CHANNELS {
+		health.Listeners += len(channel.Listeners)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(health)
+	if err != nil {
+		slog.Error("Error dispatching message", "err", err)
+		w.Header().Set("Content-Type", "text/plain")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 func parseArgs() (string, int) {
 	var err error
 	host := "127.0.0.1"
@@ -208,6 +235,11 @@ func parseArgs() (string, int) {
 func main() {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		hub := sentry.GetHubFromContext(r.Context())
+
+		if r.URL.Path == "/health" || r.URL.Path == "/health/" {
+			handleHealth(w)
+			return
+		}
 
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
