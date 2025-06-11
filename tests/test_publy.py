@@ -119,3 +119,12 @@ class PublyTestCase(BaseTestCase):
     def test_publy_404(self):
         r = self.publy.dispatch('PING', channel_name=str(uuid.uuid4()))
         self.assertEqual(404, r.status_code)
+
+    def test_health_200(self):
+        r = self.publy.dispatch('FOO', channel_name='health')
+        self.assertEqual(200, r.status_code)
+        self.assertEqual('application/json', r.headers['Content-Type'])
+        self.assertEqual({
+            'channels': 1,
+            'listeners': 1,
+        }, r.json())

@@ -229,15 +229,15 @@ func main() {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		hub := sentry.GetHubFromContext(r.Context())
 
+		if r.URL.Path == "/health" || r.URL.Path == "/health/" {
+			handleHealth(w)
+			return
+		}
+
 		// Parse channel name from path.
 		name, err := parseChannelName(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if name == "health" {
-			handleHealth(w)
 			return
 		}
 
