@@ -62,7 +62,7 @@ jobs:
       - name: 'deployed at'
         run: 'curl "${{ steps.deploy.outputs.url }}"'
 
-      - name: Git checkin
+      - name: Git tag
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: git tag ${VERSION}
