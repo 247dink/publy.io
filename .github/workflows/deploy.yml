@@ -17,7 +17,15 @@ jobs:
       id-token: write
     if: github.event.pull_request.merged == true
     steps:
-      - uses: 'actions/checkout@v4'
+      - name: checkout
+        uses: 'actions/checkout@v4'
+        with:
+          fetch-depth: 0
+
+      - name: Set up git
+        run: |
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git config user.name "${GITHUB_ACTOR}"
 
       - name: Get next version
         uses: reecetech/version-increment@2024.10.1
