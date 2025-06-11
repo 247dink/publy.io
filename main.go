@@ -200,7 +200,14 @@ func handleHealth(w http.ResponseWriter) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(health)
+	err := json.NewEncoder(w).Encode(health)
+	if err != nil {
+		slog.Error("Error dispatching message", "err", err)
+		w.Header().Set("Content-Type", "text/plain")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func parseArgs() (string, int) {
