@@ -30,6 +30,10 @@ test: publy.io .venv
 	. .venv/bin/activate; python3 -m unittest tests/test_*.py
 
 
+run: publy.io
+	./publy.io -h 0.0.0.0 -p 8880
+
+
 image:
 	docker build --target=prod .
 
