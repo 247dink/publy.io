@@ -4,6 +4,7 @@ import (
 	"os"
 	"io"
 	"fmt"
+	"sync"
 	"strconv"
 	"log/slog"
 	"net/http"
@@ -29,17 +30,23 @@ func remove[S ~[]E, E comparable](items S, item E) S {
 	return new
 }
 
-type stats struct  {
+type Stats struct  {
 	Channels int `json:"channels"`
 	Listeners int `json:"listeners"`
 }
 
-type channel struct {
+type Channel struct {
 	Name string
 	Listeners []chan string
+	mu sync.RWMutex
 }
 
-func (c channel) Send(message string) error {
+type Channels struct {
+	Channels map[string]*Channel
+	mu sync.RWMutex
+}
+
+func (c Channel) Send(message string) error {
 	slog.Debug("Sending message", "message", message, "clients", len(c.Listeners))
 
 	for i := range c.Listeners {
@@ -54,36 +61,70 @@ func (c channel) Send(message string) error {
 	return nil
 }
 
-func (c *channel) AddListener(queue chan string) {
+func (c *Channel) AddListener(queue chan string) {
+	c.mu.Lock()
 	c.Listeners = append(c.Listeners, queue)
-
-	CHANNELS[c.Name] = c
+	c.mu.Unlock()
 }
 
-func (c *channel) RemoveListener(queue chan string) {
+func (c *Channel) RemoveListener(queue chan string) {
+	c.mu.Lock()
 	c.Listeners = remove(c.Listeners, queue)
+	empty := len(c.Listeners) == 0
+	c.mu.Unlock()
 
-	if len(c.Listeners) == 0 {
+	if empty {
 		slog.Info("Removing channel", "name", c.Name)
-		delete(CHANNELS, c.Name)
+		CHANNELS.RemoveChannel(c.Name)
 	}
 }
 
-var CHANNELS = map[string]*channel{}
-
-func newChannel(name string) *channel {
-	slog.Info("Creating channel", "name", name)
-	return &channel{Name: name}
+func newChannels() (*Channels) {
+	return &Channels{Channels: map[string]*Channel{}}
 }
 
-func getChannel(name string)  *channel {
-	channel, ok := CHANNELS[name]
+var CHANNELS = newChannels()
+
+func (c *Channels) RemoveChannel(name string) {
+	c.mu.Lock()
+	delete(c.Channels, name)
+	c.mu.Unlock()
+}
+
+func (c *Channels) AddChannel(name string) *Channel {
+	slog.Info("Creating channel", "name", name)
+	channel := &Channel{Name: name}
+	c.mu.Lock()
+	c.Channels[name] = channel
+	c.mu.Unlock()
+	return channel
+}
+
+func (c *Channels) GetChannel(name string)  *Channel {
+	c.mu.RLock()
+	channel, ok := c.Channels[name]
+	c.mu.RUnlock()
 
 	if !ok {
 		return nil
 	}
 
 	return channel
+}
+
+func (c *Channels) GetOrCreateChannel(name string) (*Channel, bool) {
+	c.mu.Lock()
+	created := false
+	channel, ok := c.Channels[name]
+
+	if !ok {
+		channel = &Channel{Name: name}
+		c.Channels[name] = channel
+		created = true
+	}
+	c.mu.Unlock()
+
+	return channel, created
 }
 
 func parseChannelName(path string) (string, error) {
@@ -94,18 +135,6 @@ func parseChannelName(path string) (string, error) {
 	}
 
 	return name, nil
-}
-
-func getOrCreateChannel(name string) (*channel, bool) {
-	created := false
-	channel := getChannel(name)
-
-	if channel == nil {
-		channel = newChannel(name)
-		created = true
-	}
-
-	return channel, created
 }
 
 func isWebsocketRequest(r *http.Request) bool {
@@ -123,7 +152,7 @@ func isWebsocketRequest(r *http.Request) bool {
 	return ok
 }
 
-func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
+func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *Channel) {
 	slog.Debug("Handling websocket", "channel", channel.Name)
 
 	hub := sentry.GetHubFromContext(r.Context())
@@ -137,35 +166,43 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request, channel *channel) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	queue := make(chan string, 16)
+	channel.AddListener(queue)
+
+	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
-		err := c.CloseNow()
-		if err != nil {
-			if hub != nil {
-				hub.CaptureException(err)
+		cancel()
+		channel.RemoveListener(queue)
+		c.Close(websocket.StatusNormalClosure, "closing")
+	}()
+
+	go func() {
+		for {
+			_, _, err := c.Read(ctx)
+			if err != nil {
+				slog.Info("Client disconnected", "err", err);
+				cancel()
+				return
 			}
-			slog.Error("Error closing websocket", "err", err)
 		}
 	}()
 
-	ctx := context.Background()
-	ctx = c.CloseRead(ctx)
-
-	queue := make(chan string)
-	channel.AddListener(queue)
-	defer channel.RemoveListener(queue)
-
 	for {
-		message := <-queue
-		slog.Debug("Message to be sent via websocket", "message", message)
-		err = c.Write(ctx, websocket.MessageText, []byte(message))
-		if err != nil {
-			slog.Error("Error sending message", "err", err)
+		select {
+		case <-ctx.Done():
 			return
+		case msg := <-queue:
+			slog.Debug("Message to be sent via websocket", "message", msg)
+			if err := c.Write(ctx, websocket.MessageText, []byte(msg)); err != nil {
+				slog.Warn("Error sending message", "err", err)
+				return
+			}
 		}
 	}
 }
 
-func handleDispatch(r *http.Request, channel *channel) error {
+func handleDispatch(r *http.Request, channel *Channel) error {
 	slog.Debug("Handling dispatch", "channel", channel.Name)
 
 	hub := sentry.GetHubFromContext(r.Context())
@@ -190,12 +227,12 @@ func handleDispatch(r *http.Request, channel *channel) error {
 }
 
 func handleHealth(w http.ResponseWriter) {
-	health := &stats{
-		Channels: len(CHANNELS),
+	health := &Stats{
+		Channels: len(CHANNELS.Channels),
 		Listeners: 0,
 	}
 
-	for _, channel := range CHANNELS {
+	for _, channel := range CHANNELS.Channels {
 		health.Listeners += len(channel.Listeners)
 	}
 
@@ -249,13 +286,13 @@ func main() {
 
 		// Check if websocket (has Upgrade and Connection headers)
 		if isWebsocketRequest(r) {
-			channel, _ := getOrCreateChannel(name)
+			channel, _ := CHANNELS.GetOrCreateChannel(name)
 			handleWebsocket(w, r, channel)
 			return
 		}
 
 		// Not websocket, handle dispatch.
-		channel := getChannel(name)
+		channel := CHANNELS.GetChannel(name)
 		if channel == nil {
 			http.NotFound(w, r)
 			return
