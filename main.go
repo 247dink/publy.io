@@ -46,9 +46,10 @@ type Channels struct {
 	mu sync.RWMutex
 }
 
-func (c Channel) Send(message string) error {
+func (c *Channel) Send(message string) error {
 	slog.Debug("Sending message", "message", message, "clients", len(c.Listeners))
 
+	c.mu.RLock()
 	for i := range c.Listeners {
 		select {
 		case c.Listeners[i]<-message:
@@ -57,6 +58,7 @@ func (c Channel) Send(message string) error {
 			slog.Warn("Could not dispatch message to listener")
 		}
 	}
+	c.mu.RUnlock()
 
 	return nil
 }
